@@ -1,0 +1,57 @@
+{
+	"flutter": {
+		"platforms": {
+			"android": {
+				"default": {
+					"projectId": "little-wing-v2",
+					"appId": "1:835439441759:android:9f5cee39da107465d228ea",
+					"fileOutput": "android/app/google-services.json"
+				}
+			},
+			"dart": {
+				"lib/firebase_options.dart": {
+					"projectId": "little-wing-v2",
+					"configurations": {
+						"android": "1:835439441759:android:9f5cee39da107465d228ea",
+						"ios": "1:835439441759:ios:9e47bf03c98536e4d228ea",
+						"macos": "1:835439441759:ios:9e47bf03c98536e4d228ea",
+						"web": "1:835439441759:web:6fcd7cc6c7a4af2ad228ea",
+						"windows": "1:835439441759:web:7d388a3e142cade0d228ea"
+					}
+				}
+			}
+		}
+	},
+	"functions": {
+		"source": "functions",
+		"codebase": "default",
+		"ignore": [
+			"node_modules",
+			".git",
+			"firebase-debug.log",
+			"firebase-debug.*.log"
+		]
+	},
+	"firestore": {
+		"rules": "firestore.rules"
+	},
+	"storage": {
+		"rules": "storage.rules"
+	},
+	"emulators": {
+		"auth": {
+			"port": 9099
+		},
+		"firestore": {
+			"port": 8080
+		},
+		"storage": {
+			"port": 9199
+		},
+		"ui": {
+			"enabled": true,
+			"port": 4000
+		},
+		"singleProjectMode": true
+	}
+}

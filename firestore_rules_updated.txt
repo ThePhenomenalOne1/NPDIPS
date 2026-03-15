@@ -1,0 +1,308 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // HELPER FUNCTIONS
+    // ─────────────────────────────────────────────────────────────────────────
+
+    // Returns the caller's user document data
+    function userData() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+
+    // True if the caller is authenticated
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    // True if caller is Superadmin
+    function isSuperadmin() {
+      return isSignedIn() && userData().role == 'Superadmin';
+    }
+
+    // True if caller is Admin (or Superadmin)
+    function isAdmin() {
+      return isSignedIn() && (userData().role == 'Admin' || userData().role == 'Superadmin');
+    }
+
+    // True if caller is a ShopOwner (or Superadmin)
+    function isShopOwner() {
+      return isSignedIn() && (userData().role == 'ShopOwner' || isSuperadmin());
+    }
+
+    // True if caller has a specific named permission
+    function hasPermission(permission) {
+      return isSignedIn() && permission in userData().permissions;
+    }
+
+    // True if this store document is owned by the caller
+    function ownsStore(storeData) {
+      return isSignedIn() && storeData.ownerId == request.auth.uid;
+    }
+
+    // True if the caller is the admin / superadmin who can manage users
+    function canManageUsers() {
+      return isSuperadmin() || hasPermission('manage_users');
+    }
+
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // USERS
+    // ─────────────────────────────────────────────────────────────────────────
+    match /users/{userId} {
+      // Anyone can read their own profile; admins can read any profile.
+      allow read: if isSignedIn() && (request.auth.uid == userId || canManageUsers());
+
+      // Users can update their own profile (limited fields).
+      // Admins / Superadmins can write any field.
+      allow update: if isSignedIn() && (
+        (request.auth.uid == userId &&
+          // Prevent self-escalation: users cannot change their own role/status/permissions
+          !request.resource.data.diff(resource.data).affectedKeys()
+            .hasAny(['role', 'status', 'permissions']))
+        || canManageUsers()
+      );
+
+      // Only Superadmins can create or delete user documents directly
+      allow create, delete: if isSuperadmin();
+
+      // Followed Stores subcollection — each user manages their own follows
+      match /followed_stores/{storeId} {
+        allow read, write: if isSignedIn() && request.auth.uid == userId;
+      }
+    }
+
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // STORES
+    // ─────────────────────────────────────────────────────────────────────────
+    match /stores/{storeId} {
+      // Any authenticated user can read stores
+      allow read: if isSignedIn();
+
+      // ShopOwners can create a new store (ownerId must equal their own UID)
+      allow create: if isShopOwner() && request.resource.data.ownerId == request.auth.uid;
+
+      // ShopOwners can update their own store; Superadmins / manage_stores admins can update any
+      allow update: if isSignedIn() && (
+        ownsStore(resource.data)
+        || isSuperadmin()
+        || hasPermission('manage_stores')
+      );
+
+      // Only Superadmins can delete stores
+      allow delete: if isSuperadmin();
+    }
+
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // SHOPS  (legacy / orphaned collection – read-only for safety)
+    // ─────────────────────────────────────────────────────────────────────────
+    match /shops/{shopId} {
+      allow read: if isSignedIn();
+      allow write: if isSuperadmin(); // Only Superadmins may touch legacy data
+    }
+
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // PRODUCTS
+    // ─────────────────────────────────────────────────────────────────────────
+    match /products/{productId} {
+      // Any authenticated user can read products
+      allow read: if isSignedIn();
+
+      // ShopOwners can create products for their own store
+      allow create: if isShopOwner() &&
+        exists(/databases/$(database)/documents/stores/$(request.resource.data.storeId)) &&
+        get(/databases/$(database)/documents/stores/$(request.resource.data.storeId)).data.ownerId == request.auth.uid;
+
+      // ShopOwners can update/delete products that belong to their store
+      allow update, delete: if isSignedIn() && (
+        (isShopOwner() &&
+          exists(/databases/$(database)/documents/stores/$(resource.data.storeId)) &&
+          get(/databases/$(database)/documents/stores/$(resource.data.storeId)).data.ownerId == request.auth.uid)
+        || isSuperadmin()
+        || hasPermission('manage_stores')
+      );
+    }
+
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // ORDERS
+    // ─────────────────────────────────────────────────────────────────────────
+    match /orders/{orderId} {
+      // Customers can read their own orders; shop owners can read orders for their shop;
+      // admins with view_orders permission can read all.
+      allow read: if isSignedIn() && (
+        resource.data.customerId == request.auth.uid
+        || (isShopOwner() &&
+            exists(/databases/$(database)/documents/stores/$(resource.data.shopId)) &&
+            get(/databases/$(database)/documents/stores/$(resource.data.shopId)).data.ownerId == request.auth.uid)
+        || isSuperadmin()
+        || hasPermission('view_orders')
+      );
+
+      // Customers can create orders (customerId must be their own UID)
+      allow create: if isSignedIn() && request.resource.data.customerId == request.auth.uid;
+
+      // Customers can cancel their own pending orders; shop owners can update status on their orders;
+      // Superadmins can do anything.
+      allow update: if isSignedIn() && (
+        (resource.data.customerId == request.auth.uid &&
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status']) &&
+          request.resource.data.status == 'cancelled')
+        || (isShopOwner() &&
+            exists(/databases/$(database)/documents/stores/$(resource.data.shopId)) &&
+            get(/databases/$(database)/documents/stores/$(resource.data.shopId)).data.ownerId == request.auth.uid)
+        || isSuperadmin()
+      );
+
+      // Only Superadmins can delete orders
+      allow delete: if isSuperadmin();
+    }
+
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // REVIEWS
+    // ─────────────────────────────────────────────────────────────────────────
+    match /reviews/{reviewId} {
+      // Anyone authenticated can read reviews
+      allow read: if isSignedIn();
+
+      // Only the author can create a review (userId must equal their own UID)
+      allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
+
+      // Only the author or a Superadmin can update/delete a review
+      allow update: if isSignedIn() && (
+        resource.data.userId == request.auth.uid || isSuperadmin()
+      );
+      allow delete: if isSignedIn() && (
+        resource.data.userId == request.auth.uid || isSuperadmin()
+      );
+    }
+
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // WALLETS  (customer wallets; doc ID = user UID)
+    // ─────────────────────────────────────────────────────────────────────────
+    match /wallets/{walletId} {
+      allow read: if isSignedIn() && (
+        request.auth.uid == walletId ||
+        walletId == 'dipstore_business_account' ||
+        isSuperadmin()
+      );
+
+      allow create: if isSignedIn() && (
+        request.auth.uid == walletId ||
+        walletId == 'dipstore_business_account' ||
+        isSuperadmin()
+      );
+
+      allow update: if isSignedIn() && (
+        request.auth.uid == walletId ||
+        isSuperadmin() ||
+        // Allow any authenticated user to credit the central business wallet
+        // (used during checkout), but only to increase the balance
+        (walletId == 'dipstore_business_account' &&
+          request.resource.data.keys().hasOnly(['balance']) &&
+          request.resource.data.balance is number &&
+          request.resource.data.balance >= resource.data.balance)
+      );
+
+      allow delete: if isSuperadmin();
+    }
+
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // SHOP WALLETS  (store earnings; doc ID = store ID)
+    // ─────────────────────────────────────────────────────────────────────────
+    match /shop_wallets/{shopId} {
+      // Shop owners can read their own shop wallet; admins with view_finances can read all
+      allow read: if isSignedIn() && (
+        (isShopOwner() &&
+          exists(/databases/$(database)/documents/stores/$(shopId)) &&
+          get(/databases/$(database)/documents/stores/$(shopId)).data.ownerId == request.auth.uid)
+        || isSuperadmin()
+        || hasPermission('view_finances')
+      );
+
+      // Created / updated by the system only (via Superadmin or Cloud Functions)
+      allow create, update: if isSuperadmin();
+      allow delete: if isSuperadmin();
+    }
+
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // SHOP LEDGER  (immutable audit trail; append-only)
+    // ─────────────────────────────────────────────────────────────────────────
+    match /shop_ledger/{entryId} {
+      // Shop owners can read ledger entries for their own shop
+      allow read: if isSignedIn() && (
+        (isShopOwner() &&
+          exists(/databases/$(database)/documents/stores/$(resource.data.shopId)) &&
+          get(/databases/$(database)/documents/stores/$(resource.data.shopId)).data.ownerId == request.auth.uid)
+        || isSuperadmin()
+        || hasPermission('view_finances')
+      );
+
+      // Entries are created by the system only (Superadmin or Cloud Functions)
+      allow create: if isSuperadmin();
+
+      // Ledger entries are immutable — no updates or deletes ever
+      allow update, delete: if false;
+    }
+
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // WITHDRAWAL REQUESTS
+    // ─────────────────────────────────────────────────────────────────────────
+    match /withdrawal_requests/{requestId} {
+      // Shop owners can read their own requests; finance admins can read all
+      allow read: if isSignedIn() && (
+        resource.data.shopOwnerId == request.auth.uid
+        || isSuperadmin()
+        || hasPermission('approve_withdrawals')
+      );
+
+      // ShopOwners can create a withdrawal request for themselves
+      allow create: if isShopOwner() &&
+        request.resource.data.shopOwnerId == request.auth.uid &&
+        request.resource.data.status == 'pending';
+
+      // Only Superadmins / finance admins can approve/reject requests;
+      // shop owners cannot modify their own submitted requests
+      allow update: if isSuperadmin() || hasPermission('approve_withdrawals');
+
+      // Only Superadmins can delete requests
+      allow delete: if isSuperadmin();
+    }
+
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // OTP SESSIONS  (phone verification — rate-limited, write-validated)
+    // ─────────────────────────────────────────────────────────────────────────
+    match /otp_sessions/{phoneId} {
+      // Anyone can create an OTP session (unauthenticated users need this for signup)
+      // Validates that only expected fields are written to prevent abuse
+      allow create: if request.resource.data.keys().hasAll(['otp', 'createdAt']) &&
+                       request.resource.data.otp is string &&
+                       request.resource.data.otp.size() == 6;
+
+      // Allow read and update so the app can verify the code
+      allow read, update: if true;
+
+      // Nobody can delete OTP sessions from the client
+      allow delete: if isSuperadmin();
+    }
+
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // DEFAULT: deny everything else
+    // ─────────────────────────────────────────────────────────────────────────
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+  }
+}

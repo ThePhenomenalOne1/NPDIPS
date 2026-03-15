@@ -1,0 +1,13 @@
+{
+  "name": "dipstore-db-tools",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Firestore maintenance scripts",
+  "scripts": {
+    "deduplicate": "node deduplicate_firestore.js",
+    "deduplicate:dry": "node deduplicate_firestore.js --dry-run"
+  },
+  "dependencies": {
+    "firebase-admin": "^11.11.1"
+  }
+}

@@ -1,0 +1,49 @@
+{
+  "project_info": {
+    "project_number": "835439441759",
+    "firebase_url": "https://little-wing-v2-default-rtdb.firebaseio.com",
+    "project_id": "little-wing-v2",
+    "storage_bucket": "little-wing-v2.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:835439441759:android:9f5cee39da107465d228ea",
+        "android_client_info": {
+          "package_name": "com.example.dipstore_ui"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCTYogP6dIJx-Z3Uu285s6_HVLpig4ck-k"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:835439441759:android:45a01bc2b106bdf0d228ea",
+        "android_client_info": {
+          "package_name": "com.sgc.dipstore"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCTYogP6dIJx-Z3Uu285s6_HVLpig4ck-k"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

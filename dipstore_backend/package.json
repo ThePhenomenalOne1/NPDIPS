@@ -1,0 +1,22 @@
+{
+  "name": "dipstore-backend",
+  "version": "1.0.0",
+  "description": "DipStore OTP backend for Twilio SMS",
+  "private": true,
+  "scripts": {
+    "dev": "vercel dev",
+    "build": "echo 'Build complete'",
+    "start": "node api/otp.js"
+  },
+  "dependencies": {
+    "twilio": "^3.80.0",
+    "cors": "^2.8.5",
+    "dotenv": "^16.0.3"
+  },
+  "devDependencies": {
+    "vercel": "^28.0.0"
+  },
+  "engines": {
+    "node": "20.x"
+  }
+}

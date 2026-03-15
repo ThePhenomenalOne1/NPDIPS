@@ -1,0 +1,298 @@
+================================================================================
+  DIPSTORE / KRD HUB — FIRESTORE DATABASE STRUCTURE
+  Project ID : little-wing-v2
+  Generated  : 2026-03-14
+  Source     : Derived from full source-code analysis
+================================================================================
+
+────────────────────────────────────────────────────────────────────────────────
+COLLECTION: users
+  Document ID: Firebase Authentication UID (string)
+  Purpose   : User profiles for all roles
+────────────────────────────────────────────────────────────────────────────────
+  Field           Type        Required  Notes
+  ─────────────────────────────────────────────────────────────────────────────
+  id              String      YES       = Firebase Auth UID (doc ID)
+  name            String      YES
+  email           String      YES       Should be unique; no DB-level constraint
+  phoneNumber     String      NO
+  role            String      YES       Values: Superadmin | Admin | ShopOwner |
+                                                customer | Guest | Merchant
+  status          String      YES       Values: Active | Suspended | Deleted
+  permissions     Array<str>  YES       e.g. manage_shop, view_orders,
+                                             manage_users
+  shopId          String      NO        Primary shop ID if role = ShopOwner
+  avatarUrl       String      NO
+  isVerified      Boolean     YES
+  isActive        Boolean     YES
+  createdAt       Timestamp   YES
+  updatedAt       Timestamp   NO
+
+  DUPLICATE KEY : email  (same email address → different UIDs)
+
+  SUB-COLLECTION: users/{uid}/followed_stores
+    Document ID: storeId
+    Field       Type      Notes
+    ─────────────────────────────────────────────────
+    storeId     String    = doc ID; the store the user follows
+
+
+────────────────────────────────────────────────────────────────────────────────
+COLLECTION: stores
+  Document ID: Auto-generated (string)
+  Purpose   : Store / business listings used by the Flutter app
+  NOTE      : A separate "shops" collection exists in Firestore rules and the
+              seed service — this is a different collection and may contain
+              stale or orphaned data.
+────────────────────────────────────────────────────────────────────────────────
+  Field           Type        Required  Notes
+  ─────────────────────────────────────────────────────────────────────────────
+  id              String      YES       = doc ID
+  name            String      YES
+  ownerId         String      YES       References users.id
+  category        String      YES
+  tagline         String      YES
+  about           String      YES
+  imageUrl        String      NO
+  phoneNumber     String      NO
+  isFeatured      Boolean     YES
+  status          String      YES       Values: active | suspended |
+                                                pending_approval
+  commissionRate  Double      YES       Default: 0.10  (10 %)
+  createdAt       Timestamp   YES
+  approvedAt      Timestamp   NO
+
+  DUPLICATE KEY : name + ownerId  (same owner registering the same store twice)
+
+
+────────────────────────────────────────────────────────────────────────────────
+COLLECTION: shops   ⚠ LEGACY / ORPHANED
+  Document ID: Auto-generated
+  Purpose   : Used only by SeedDemoOwnersService and Firestore security rules.
+              The live app reads/writes "stores", NOT "shops".
+              Unless actively used for demo seeding, this collection may be
+              safely removed after auditing its contents.
+────────────────────────────────────────────────────────────────────────────────
+
+
+────────────────────────────────────────────────────────────────────────────────
+COLLECTION: products
+  Document ID: Auto-generated (string)
+  Purpose   : Product listings linked to a store
+────────────────────────────────────────────────────────────────────────────────
+  Field           Type        Required  Notes
+  ─────────────────────────────────────────────────────────────────────────────
+  id              String      YES       = doc ID
+  name            String      YES
+  brand           String      YES
+  price           Double      YES
+  imageUrl        String      YES
+  description     String      NO
+  storeId         String      NO        References stores.id
+  category        String      NO
+  isPopular       Boolean     YES
+  isSellingFast   Boolean     YES
+  createdAt       Timestamp   YES
+
+  DUPLICATE KEY : name + storeId  (same product added twice to the same store)
+
+
+────────────────────────────────────────────────────────────────────────────────
+COLLECTION: orders
+  Document ID: Auto-generated (string)
+  Purpose   : Customer purchase orders
+────────────────────────────────────────────────────────────────────────────────
+  Field           Type              Required  Notes
+  ─────────────────────────────────────────────────────────────────────────────
+  id              String            YES       = doc ID
+  customerId      String            YES       References users.id
+  shopId          String            YES       References stores.id
+  items           Array<OrderItem>  YES       Embedded — see sub-schema below
+  subtotal        Double            YES
+  taxAmount       Double            YES
+  platformFee     Double            YES
+  total           Double            YES
+  status          String            YES       Values: pending | paid | completed
+                                                       | cancelled | refunded
+  paymentMethod   String            YES       fib | nass | card | etc.
+  notes           String            NO
+  createdAt       Timestamp         YES
+  completedAt     Timestamp         NO
+
+  OrderItem (embedded in items array):
+    productId         String
+    productName       String
+    productBrand      String
+    priceAtPurchase   Double
+    quantity          Integer
+    productImageUrl   String (nullable)
+
+
+────────────────────────────────────────────────────────────────────────────────
+COLLECTION: reviews
+  Document ID: Auto-generated (string)
+  Purpose   : Ratings and reviews for products or stores
+────────────────────────────────────────────────────────────────────────────────
+  Field           Type        Required  Notes
+  ─────────────────────────────────────────────────────────────────────────────
+  id              String      YES       = doc ID
+  userId          String      YES       Reviewer's UID
+  userName        String      YES
+  userImageUrl    String      NO
+  targetId        String      YES       Product ID or Store ID being reviewed
+  rating          Double      YES       Typically 1.0 – 5.0
+  comment         String      NO
+  createdAt       Timestamp   YES
+
+  DUPLICATE KEY : userId + targetId  (one user reviewing same target twice)
+  NOTE: Uniqueness is enforced by a pre-insert Firestore query in
+        review_service.dart but is susceptible to race conditions.
+
+
+────────────────────────────────────────────────────────────────────────────────
+COLLECTION: wallets
+  Document ID: Firebase UID (same as users doc ID)
+  Purpose   : Customer wallet / balance
+────────────────────────────────────────────────────────────────────────────────
+  Field           Type        Required  Notes
+  ─────────────────────────────────────────────────────────────────────────────
+  userId          String      YES       = doc ID (enforces uniqueness)
+  balance         Double      YES       Default: 0.0
+
+  NOTE: Doc ID = userId enforces uniqueness at the database level.
+
+
+────────────────────────────────────────────────────────────────────────────────
+COLLECTION: shop_wallets
+  Document ID: shopId (same as stores doc ID)
+  Purpose   : Shop owner financial balance
+────────────────────────────────────────────────────────────────────────────────
+  Field              Type        Required  Notes
+  ─────────────────────────────────────────────────────────────────────────────
+  shopId             String      YES       = doc ID (enforces uniqueness)
+  availableBalance   Double      YES       Ready to withdraw
+  pendingBalance     Double      YES
+  totalWithdrawn     Double      YES       Cumulative total withdrawn
+  totalEarned        Double      YES       Cumulative gross earnings
+  lastUpdated        Timestamp   YES
+
+  NOTE: Doc ID = shopId enforces uniqueness at the database level.
+
+
+────────────────────────────────────────────────────────────────────────────────
+COLLECTION: shop_ledger
+  Document ID: Auto-generated (string)
+  Purpose   : Immutable audit trail of all financial transactions per shop
+────────────────────────────────────────────────────────────────────────────────
+  Field           Type        Required  Notes
+  ─────────────────────────────────────────────────────────────────────────────
+  id              String      YES       = doc ID
+  shopId          String      YES       References stores.id
+  orderId         String      YES       References orders.id
+  type            String      YES       Values: sale | platformFee | refund |
+                                                withdrawal | manualAdjustment
+  amount          Double      YES
+  description     String      YES
+  createdAt       Timestamp   YES
+  createdBy       String      NO        UID or "system"
+
+  NOTE: Ledger entries are append-only; no deduplication applied.
+
+
+────────────────────────────────────────────────────────────────────────────────
+COLLECTION: withdrawal_requests
+  Document ID: Auto-generated (string)
+  Purpose   : Withdrawal requests from shop owners
+────────────────────────────────────────────────────────────────────────────────
+  Field           Type        Required  Notes
+  ─────────────────────────────────────────────────────────────────────────────
+  id              String      YES       = doc ID
+  shopOwnerId     String      YES       User UID
+  shopId          String      YES       References stores.id
+  amount          Double      YES
+  status          String      YES       Values: pending | approved | rejected |
+                                                completed | failed
+  bankAccountId   String      NO
+  rejectionReason String      NO
+  createdAt       Timestamp   YES
+  reviewedAt      Timestamp   NO
+  reviewedBy      String      NO        Admin UID
+  completedAt     Timestamp   NO
+
+
+────────────────────────────────────────────────────────────────────────────────
+COLLECTION: otp_sessions
+  Document ID: phoneId / session identifier
+  Purpose   : Stores OTP verification sessions (legacy Cloud Function)
+────────────────────────────────────────────────────────────────────────────────
+  Field           Type        Required  Notes
+  ─────────────────────────────────────────────────────────────────────────────
+  otp             String      YES       6-digit code (stored in plaintext) ⚠
+  expiresAt       Integer     YES       Unix ms timestamp
+  attempts        Integer     YES       Max 5; prevents brute-force
+  verified        Boolean     NO
+
+  ⚠ SECURITY: Firestore rules allow `read, write: if true` on this collection.
+    This is fully public with no authentication. Rotate rules ASAP.
+
+
+================================================================================
+RELATIONSHIPS (Entity Overview)
+================================================================================
+
+  users ──────────────────────────── owns ──────────────────── stores
+  users ──────────────────────────── writes ────────────────── reviews
+  users ──────────────────────────── places ────────────────── orders
+  users ──────────────────────────── has_wallet ─────────────── wallets
+  users/{uid}/followed_stores ─────── follows ──────────────── stores
+  stores ─────────────────────────── contains ──────────────── products
+  stores ─────────────────────────── has_wallet ─────────────── shop_wallets
+  stores ─────────────────────────── has_ledger ─────────────── shop_ledger
+  stores ─────────────────────────── has_requests ───────────── withdrawal_requests
+  orders ─────────────────────────── references ─────────────── stores
+  orders ─────────────────────────── generates ──────────────── shop_ledger
+  products ───────────────────────── described_by ────────────── reviews
+
+
+================================================================================
+DUPLICATE RISK SUMMARY
+================================================================================
+
+  Collection            Duplicate Key              Enforcement
+  ──────────────────────────────────────────────────────────────────────────
+  users                 email                      NONE  ← at risk
+  stores                name + ownerId             NONE  ← at risk
+  stores                name (any owner)           NONE  ← at risk (e.g. "Urban Sole")
+  products              name + storeId             NONE  ← at risk
+  reviews               userId + targetId          Soft check (race condition) ← at risk
+  wallets               userId (= doc ID)          DB-level (safe)
+  shop_wallets          shopId (= doc ID)          DB-level (safe)
+  orders                —                          Each order is unique by intent
+  shop_ledger           —                          Append-only immutable log
+  withdrawal_requests   —                          Each request is unique by intent
+
+
+================================================================================
+KNOWN SCHEMA ISSUES
+================================================================================
+
+  1. DUAL COLLECTION CONFLICT
+     "stores" (used by app) vs "shops" (used by seed service + security rules).
+     Security rules for "shops" do NOT protect documents in "stores".
+     Recommendation: Migrate rules and seed service to use "stores".
+
+  2. HARDCODED TWILIO CREDENTIALS
+     twilio_otp_service.dart and functions/otp.js embed live Twilio credentials
+     in source code. These should be rotated and moved to environment variables.
+
+  3. OTP SESSION SECURITY
+     otp_sessions collection has open read/write rules (no auth required).
+     Recommendation: Restrict to authenticated users or remove if unused.
+
+  4. OTP STORED IN PLAINTEXT
+     otp_sessions stores the raw OTP code in Firestore.
+     Recommendation: Store only a bcrypt/HMAC hash instead.
+
+================================================================================
+END OF DOCUMENT
+================================================================================
