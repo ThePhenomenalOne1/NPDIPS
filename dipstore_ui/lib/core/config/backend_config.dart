@@ -1,1 +1,1 @@
-const String backendBaseUrl = 'https://dipstorebackend.vercel.app';
+const String backendBaseUrl = 'https://npdips.vercel.app';
