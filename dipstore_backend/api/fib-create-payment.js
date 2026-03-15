@@ -1,5 +1,6 @@
 const {
   authenticateFib,
+  createMockPaymentSession,
   getFibConfig,
   normalizePaymentSession,
   setCors,
@@ -31,6 +32,17 @@ module.exports = async function handler(req, res) {
       return res.status(400).json({
         success: false,
         message: "A valid payment amount is required",
+      });
+    }
+
+    if (config.mockMode) {
+      return res.status(200).json({
+        success: true,
+        payment: createMockPaymentSession({
+          amount: normalizedAmount.toFixed(2),
+          description: description || "DipStore Checkout",
+          config,
+        }),
       });
     }
 

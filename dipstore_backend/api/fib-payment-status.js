@@ -1,4 +1,9 @@
-const { authenticateFib, getFibConfig, setCors } = require("./_fib");
+const {
+  authenticateFib,
+  getFibConfig,
+  getMockPaymentStatus,
+  setCors,
+} = require("./_fib");
 
 module.exports = async function handler(req, res) {
   setCors(res, "GET, OPTIONS");
@@ -21,6 +26,19 @@ module.exports = async function handler(req, res) {
     }
 
     const config = getFibConfig(req);
+
+    if (config.mockMode) {
+      const mockStatus = getMockPaymentStatus(paymentId);
+      if (mockStatus) {
+        return res.status(200).json({
+          success: true,
+          paymentId: mockStatus.paymentId,
+          status: mockStatus.status,
+          mockMode: true,
+        });
+      }
+    }
+
     const token = await authenticateFib(config);
 
     const statusResponse = await fetch(

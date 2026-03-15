@@ -85,9 +85,11 @@ class _FibPaymentDialogState extends State<_FibPaymentDialog> {
                   fontWeight: FontWeight.bold,
                 ),
               ),
-              const Text(
-                'Official Payment Session',
-                style: TextStyle(
+              Text(
+                widget.paymentSession.mockMode
+                    ? 'Mock Payment Session'
+                    : 'Official Payment Session',
+                style: const TextStyle(
                   color: Colors.white70,
                   fontSize: 14,
                 ),
@@ -119,6 +121,27 @@ class _FibPaymentDialogState extends State<_FibPaymentDialog> {
                 ),
               ),
               const SizedBox(height: 20),
+              if (widget.paymentSession.mockMode) ...[
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.08),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: Colors.white24),
+                  ),
+                  child: Text(
+                    widget.paymentSession.mockMessage.isNotEmpty
+                        ? widget.paymentSession.mockMessage
+                        : 'Mock FIB mode is enabled. Verify Payment will simulate a successful payment.',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 13,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 20),
+              ],
               Container(
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
@@ -161,7 +184,12 @@ class _FibPaymentDialogState extends State<_FibPaymentDialog> {
                       ),
                     ),
                     const SizedBox(height: 8),
-                    if (widget.paymentSession.appLinks.isEmpty)
+                    if (widget.paymentSession.mockMode)
+                      const Text(
+                        'Mock mode does not require opening a real FIB app. Press Verify Payment to continue.',
+                        style: TextStyle(color: Colors.white70),
+                      )
+                    else if (widget.paymentSession.appLinks.isEmpty)
                       const Text(
                         'No FIB app links were returned for this payment session.',
                         style: TextStyle(color: Colors.white70),
@@ -235,8 +263,10 @@ class _FibPaymentDialogState extends State<_FibPaymentDialog> {
                                 color: AppColors.primary,
                               ),
                             )
-                          : const Text(
-                              'Verify Payment',
+                            : Text(
+                              widget.paymentSession.mockMode
+                                ? 'Verify Mock Payment'
+                                : 'Verify Payment',
                               style: TextStyle(
                                 color: AppColors.primary,
                                 fontWeight: FontWeight.bold,

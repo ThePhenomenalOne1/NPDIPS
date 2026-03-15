@@ -15,19 +15,25 @@ function getFibConfig(req) {
   const clientId = process.env.FIB_CLIENT_ID;
   const clientSecret = process.env.FIB_CLIENT_SECRET;
   const environment = process.env.FIB_ENVIRONMENT || "dev";
+  const publicBaseUrl = getPublicBaseUrl(req);
+  const mockMode =
+    process.env.FIB_MOCK_MODE === "true" ||
+    process.env.FIB_MOCK_MODE === "1" ||
+    !clientId ||
+    !clientSecret;
 
-  if (!clientId || !clientSecret) {
+  if (!mockMode && (!clientId || !clientSecret)) {
     throw new Error(
       "Missing FIB env vars. Required: FIB_CLIENT_ID, FIB_CLIENT_SECRET",
     );
   }
 
-  const publicBaseUrl = getPublicBaseUrl(req);
-
   return {
     clientId,
     clientSecret,
     environment,
+    mockMode,
+    publicBaseUrl,
     currency: process.env.FIB_CURRENCY || "IQD",
     statusCallbackUrl:
       process.env.FIB_STATUS_CALLBACK_URL ||
@@ -71,15 +77,55 @@ function normalizePaymentSession(response) {
     qrCode: response.qrCode || "",
     readableCode: response.readableCode || "",
     validUntil: response.validUntil || "",
+    mockMode: response.mockMode === true,
+    mockMessage: response.mockMessage || "",
     personalAppLink: response.personalAppLink || "",
     businessAppLink: response.businessAppLink || "",
     corporateAppLink: response.corporateAppLink || "",
   };
 }
 
+function createMockPaymentSession({ amount, description, config }) {
+  const timestamp = Date.now();
+  const paymentId = `MOCK-FIB-${timestamp}`;
+  const encodedPaymentId = encodeURIComponent(paymentId);
+  const readableCode = `${timestamp}`.substring(5, 13);
+  const mockLink = `${config.publicBaseUrl}/api/fib/payment-status?paymentId=${encodedPaymentId}`;
+
+  return normalizePaymentSession({
+    paymentId,
+    qrCode: "mock-qr-code",
+    readableCode,
+    validUntil: new Date(Date.now() + 30 * 60 * 1000).toISOString(),
+    mockMode: true,
+    mockMessage:
+      "Mock FIB mode is enabled. Use Verify Payment to simulate a completed payment.",
+    personalAppLink: mockLink,
+    businessAppLink: mockLink,
+    corporateAppLink: mockLink,
+    description,
+    amount,
+  });
+}
+
+function getMockPaymentStatus(paymentId) {
+  const normalizedId = `${paymentId || ""}`.toUpperCase();
+  if (normalizedId.startsWith("MOCK-FIB-")) {
+    return {
+      paymentId,
+      status: "PAID",
+      mockMode: true,
+    };
+  }
+
+  return null;
+}
+
 module.exports = {
+  createMockPaymentSession,
   authenticateFib,
   getFibConfig,
+  getMockPaymentStatus,
   normalizePaymentSession,
   setCors,
 };

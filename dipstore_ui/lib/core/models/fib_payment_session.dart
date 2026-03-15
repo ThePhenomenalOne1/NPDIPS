@@ -3,6 +3,8 @@ class FibPaymentSession {
   final String qrCode;
   final String readableCode;
   final String validUntil;
+  final bool mockMode;
+  final String mockMessage;
   final String personalAppLink;
   final String businessAppLink;
   final String corporateAppLink;
@@ -12,6 +14,8 @@ class FibPaymentSession {
     required this.qrCode,
     required this.readableCode,
     required this.validUntil,
+    required this.mockMode,
+    required this.mockMessage,
     required this.personalAppLink,
     required this.businessAppLink,
     required this.corporateAppLink,
@@ -23,6 +27,8 @@ class FibPaymentSession {
       qrCode: (json['qrCode'] ?? '').toString(),
       readableCode: (json['readableCode'] ?? '').toString(),
       validUntil: (json['validUntil'] ?? '').toString(),
+      mockMode: json['mockMode'] == true,
+      mockMessage: (json['mockMessage'] ?? '').toString(),
       personalAppLink: (json['personalAppLink'] ?? '').toString(),
       businessAppLink: (json['businessAppLink'] ?? '').toString(),
       corporateAppLink: (json['corporateAppLink'] ?? '').toString(),
